@@ -2,27 +2,56 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
-#define N 1024*1024
 #define THREADS_PER_BLOCK 512
 
-__global__ void GPU_big_dot(float *A, float *B, float *C, int N) {
+__global__ void GPU_big_dot(float *A, float *B, float *C, const long long N) {
 	
-	int i;
-	__shared__ float dev[THREADS_PER_BLOCK];
-	int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	dev[threadIdx.x] = A[idx] + B[idx];
-	assert(A != NULL);
-	assert(B != NULL);
+	__shared__ float device_data[THREADS_PER_BLOCK];
+	unsigned int idx, stride, i;
+	idx = threadIdx.x + blockIdx.x * blockDim.x;
+	stride = blockDim.x*gridDim.x;
+
+	device_data[threadIdx.x] = A[idx] * B[idx];
+
+	
+	__syncthreads();
 
 	if(threadIdx.x == 0)
 	{
-		float total = 0.0;
-		for(i = 0; i < N; i++)
-			total+=dev[i];
-		atomicAdd(C, total);
+		float mult = 0.0;
+		for(i = 0; i < THREADS_PER_BLOCK; i++)
+			mult += device_data[i];
+		__syncthreads();
+		atomicAdd(C, mult);
 	}
-}
+	
+	/*
+	float mult = 0.0;
+	while(idx < N)
+	{
+		mult += A[idx]*B[idx];	
+		idx += stride;
+	}
+	device_data[threadIdx.x] = mult;
+	
+	__syncthreads();
+
+	i = blockDim.x/2;
+	while(i != 0)
+	{
+		if(threadIdx.x < i)
+			device_data[threadIdx.x] += device_data[threadIdx.x + i];
+		__syncthreads();
+		i /= 2;
+	}
+
+	if(threadIdx.x == 0)
+		atomicAdd(C, device_data[0]);
+	*/
+}	
+
 
 
 // Code provided by Dr. Jin
@@ -53,13 +82,13 @@ float * get_random_vector(int N) {
       return V;
 }
 
-float CPU_big_dot(float *A, float *B, int N) {
+float CPU_big_dot(float *A, float *B, long long N) {
 
 	int i;
 	float c = 0.0;
 	for(i = 0; i < N; i++)
 	{
-		c += A[i] + B[i];
+		c += A[i] * B[i];
 	}
 	return c;
 }
@@ -68,7 +97,13 @@ float CPU_big_dot(float *A, float *B, int N) {
 
 int main(int argc, char ** argv) {
 
-	long long start_cpu = 0, start_gpu = 0;
+	long long N_in = 100*512*512;
+	if(argc == 2)
+		N_in = atoi(argv[1]); // Allow user to set number of elements
+	const long long N = N_in;
+
+	//Initial variables
+	long long start_cpu = 0, start_gpu = 0, stop_cpu = 0, stop_gpu = 0;
 	char name_cpu[] = "CPU: Tcpu", name_gpu[] = "GPU: Tgpu";
 	float *v1, *v2, *result_gpu, result_cpu = 0.0; // host copies
 	float *device_v1, *device_v2, *device_result_gpu; // device copies
@@ -76,6 +111,7 @@ int main(int argc, char ** argv) {
 
 	//Allocate memory and generate random vectors;
 	result_gpu = (float *) malloc(sizeof(float));
+	*result_gpu = 0.0;
 	v1 = get_random_vector(N);
 	v2 = get_random_vector(N);
 
@@ -83,22 +119,29 @@ int main(int argc, char ** argv) {
 	cudaMalloc((void **)&device_v1, size);
 	cudaMalloc((void **)&device_v2, size);
 	cudaMalloc((void **)&device_result_gpu, sizeof(float));
+	cudaMemset(device_result_gpu, 0.0, sizeof(float));
 
 	//Compute CPU
 	start_cpu = start_timer();
 	result_cpu = CPU_big_dot(v1, v2, N);
-	stop_timer(start_cpu, name_cpu);
+	stop_cpu = stop_timer(start_cpu, name_cpu);
+	
 
 	//Compute GPU
 	start_gpu = start_timer();
 	//Copy the inputs to device
-	cudaDeviceSynchronize();
 	cudaMemcpy(device_v1, v1, size, cudaMemcpyHostToDevice);
 	cudaMemcpy(device_v2, v2, size, cudaMemcpyHostToDevice);
-	GPU_big_dot<<<1,N>>>(v1, v2, result_gpu, N);
+	GPU_big_dot<<<N/THREADS_PER_BLOCK,THREADS_PER_BLOCK>>>(device_v1, device_v2, device_result_gpu, N);
 	cudaMemcpy(result_gpu,device_result_gpu,sizeof(float),cudaMemcpyDeviceToHost);
-	stop_timer(start_gpu, name_gpu);
+	stop_gpu = stop_timer(start_gpu, name_gpu);
+	
 
+	//STATS REGION
+	printf("CPU Result: %e\n", result_cpu);
+	printf("GPU Result: %e\n", *result_gpu);
+	printf("Speedup: %lf\n", (float) stop_cpu / (float) stop_gpu);
+	printf("Accuracy: %lf%%\n", 1e2*abs(*result_gpu - result_cpu) / (result_cpu));
 	//Cleanup and exit
 	cudaFree(device_v1);
 	cudaFree(device_v2);
