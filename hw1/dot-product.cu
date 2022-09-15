@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#define THREADS_PER_BLOCK 512
+#define THREADS_PER_BLOCK 1024
 
 __global__ void GPU_big_dot(float *A, float *B, float *C, const long long N) {
 	
@@ -103,8 +103,8 @@ int main(int argc, char ** argv) {
 	const long long N = N_in;
 
 	//Initial variables
-	long long start_cpu = 0, start_gpu = 0, stop_cpu = 0, stop_gpu = 0;
-	char name_cpu[] = "CPU: Tcpu", name_gpu[] = "GPU: Tgpu";
+	long long start_cpu = 0, start_gpu = 0, stop_cpu = 0, stop_gpu1 = 0, stop_gpu2 = 0, stop_gpu3 = 0;
+	char name_cpu[] = "CPU: Tcpu", name_gpu[] = "GPU Kernel: Tker", name_gpu2[] = "GPU Memcpy: Tmem";
 	float *v1, *v2, *result_gpu, result_cpu = 0.0; // host copies
 	float *device_v1, *device_v2, *device_result_gpu; // device copies
 	int size = N * sizeof(float);
@@ -125,23 +125,30 @@ int main(int argc, char ** argv) {
 	start_cpu = start_timer();
 	result_cpu = CPU_big_dot(v1, v2, N);
 	stop_cpu = stop_timer(start_cpu, name_cpu);
-	
+	//dim3 dimGrid(128, 1, 1);
+    //dim3 dimBlock(32, 1, 1);
 
+    dim3 numBlocks((N+THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK);
 	//Compute GPU
 	start_gpu = start_timer();
 	//Copy the inputs to device
 	cudaMemcpy(device_v1, v1, size, cudaMemcpyHostToDevice);
 	cudaMemcpy(device_v2, v2, size, cudaMemcpyHostToDevice);
-	GPU_big_dot<<<N/THREADS_PER_BLOCK,THREADS_PER_BLOCK>>>(device_v1, device_v2, device_result_gpu, N);
+    stop_gpu1 = stop_timer(start_gpu, name_gpu2);
+    start_gpu = start_timer();
+	GPU_big_dot<<<numBlocks,THREADS_PER_BLOCK>>>(device_v1, device_v2, device_result_gpu, N);
+    stop_gpu2 = stop_timer(start_gpu, name_gpu);
+    start_gpu = start_timer();
 	cudaMemcpy(result_gpu,device_result_gpu,sizeof(float),cudaMemcpyDeviceToHost);
-	stop_gpu = stop_timer(start_gpu, name_gpu);
+	stop_gpu3 = stop_timer(start_gpu, name_gpu2);
 	
 
 	//STATS REGION
-	printf("CPU Result: %e\n", result_cpu);
+	printf("\nCPU Result: %e\n", result_cpu);
 	printf("GPU Result: %e\n", *result_gpu);
-	printf("Speedup: %lf\n", (float) stop_cpu / (float) stop_gpu);
-	printf("Accuracy: %lf%%\n", 1e2*abs(*result_gpu - result_cpu) / (result_cpu));
+	printf("\nSpeedup (with data transfer): %lf\n", (float)(stop_cpu)/ ((float)(stop_gpu1 + stop_gpu2 + stop_gpu3)));
+    printf("Speedup (just kernel): %lf\n", (float) stop_cpu / (float) stop_gpu2);
+	printf("\nRelative Error: %lf%%\n", 1e2*abs(*result_gpu - result_cpu) / (result_cpu));
 	//Cleanup and exit
 	cudaFree(device_v1);
 	cudaFree(device_v2);
