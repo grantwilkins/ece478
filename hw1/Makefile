@@ -1,5 +1,5 @@
 NVCC = nvcc
-CUDAFLAGS = -arch=sm_61 -O2
+CUDAFLAGS = -O2 -g
 
 all: dot-product.cu
 	$(NVCC) dot-product.cu $(CUDAFLAGS) -o dot-product

@@ -1,3 +1,16 @@
+/*
+Grant Wilkins
+ECE 4780 Fall 2022
+Homework 1
+
+In this homework we create a CPU and GPU version of 
+a floating point vector dot product. Afterwards we compare
+the results for accuracy and speedup.
+
+We utilize a threads/block of 1024, the max value available
+for CUDA, however this can be adjusted as necessary.
+*/
+
 #include <sys/time.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -5,30 +18,6 @@
 #include <math.h>
 
 #define THREADS_PER_BLOCK 1024
-
-//Kernel function, create a
-__global__ void GPU_big_dot(float *A, float *B, float *C, long long N) {
-	
-	__shared__ float device_data[THREADS_PER_BLOCK];
-	unsigned int idx, i;
-	float mult;
-	idx = threadIdx.x + blockIdx.x * blockDim.x; // Normal indexing
-
-	device_data[threadIdx.x] = A[idx] * B[idx];
-
-	__syncthreads();
-
-	//Reduction done by the root thread in block
-	if(threadIdx.x == 0)
-	{
-		mult = 0.0;
-		for(i = 0; i < THREADS_PER_BLOCK; i++)
-			mult += device_data[i];
-		atomicAdd(C, mult);
-	}
-}	
-
-
 
 // Code provided by Dr. Jin
 long long start_timer() {
@@ -60,6 +49,7 @@ float * get_random_vector(int N) {
 
 float CPU_big_dot(float *A, float *B, long long N) {
 
+	//Very typical O(N) dot product
 	int i;
 	float c = 0.0;
 	for(i = 0; i < N; i++)
@@ -69,11 +59,35 @@ float CPU_big_dot(float *A, float *B, long long N) {
 	return c;
 }
 
+//Kernel function, create a
+__global__ void GPU_big_dot(float *A, float *B, float *C, long long N) {
+	
+	// Share memory across all threads in the block
+	__shared__ float device_data[THREADS_PER_BLOCK];
+	unsigned int idx, i;
+	float block_sum;
+	idx = threadIdx.x + blockIdx.x * blockDim.x; // Normal indexing
 
+	// For a given thread store multiplication
+	device_data[threadIdx.x] = A[idx] * B[idx];
+
+	// Ensure all threads have finished computation
+	__syncthreads();
+
+	//Reduction done by the root thread in block
+	if(threadIdx.x == 0)
+	{
+		block_sum = 0.0;
+		//Sum all of the multiplication done
+		for(i = 0; i < THREADS_PER_BLOCK; i++)
+			block_sum += device_data[i];
+		atomicAdd(C, block_sum);
+	}
+}
 
 int main(int argc, char ** argv) {
 
-	long long N = 100*512*512;
+	long long N = 100*1024*1024;
 	if(argc == 2)
 	{
 		N = atoi(argv[1]); // Allow user to set number of elements
@@ -81,7 +95,7 @@ int main(int argc, char ** argv) {
 	else
 	{
 		printf("ATTN: Usage: ./dot-product <NUM_ELEMS>\n");
-		printf("Proceeding with default N = %lld\n\n", N);
+		printf("Proceeding with default N = %lld\n", N);
 	}
 
 	//Initial variables
@@ -101,9 +115,12 @@ int main(int argc, char ** argv) {
 	cudaMalloc((void **)&device_v1, size);
 	cudaMalloc((void **)&device_v2, size);
 	cudaMalloc((void **)&device_result_gpu, sizeof(float));
+
+	//Initialize the result to 0.0
 	cudaMemset(device_result_gpu, 0.0, sizeof(float));
 
 	//Compute CPU
+	printf("\n---TIMING CPU---\n");
 	start_cpu = start_timer();
 	result_cpu = CPU_big_dot(v1, v2, N);
 	stop_cpu = stop_timer(start_cpu, name_cpu);
@@ -113,6 +130,7 @@ int main(int argc, char ** argv) {
 	//still have a non-zero number of blocks.
     	dim3 numBlocks((N+THREADS_PER_BLOCK-1)/THREADS_PER_BLOCK);
 	
+	printf("\n---TIMING GPU---\n");
 	start_gpu = start_timer();
 	//Copy the inputs to device
 	cudaMemcpy(device_v1, v1, size, cudaMemcpyHostToDevice);
@@ -128,14 +146,19 @@ int main(int argc, char ** argv) {
     	start_gpu = start_timer();
 	cudaMemcpy(result_gpu,device_result_gpu,sizeof(float),cudaMemcpyDeviceToHost);
 	stop_gpu3 = stop_timer(start_gpu, name_gpu2);
+	printf("GPU: Tgpu = %.5f sec\n", (float) (stop_gpu1 + stop_gpu2 + stop_gpu3)/(1000.0*1000.0));
 	
 
 	//STATS REGION
-	printf("\nCPU Result: %e\n", result_cpu);
+	printf("\n---DATA RESULTS---\n");
+	printf("CPU Result: %e\n", result_cpu);
 	printf("GPU Result: %e\n", *result_gpu);
-	printf("\nSpeedup (with data transfer): %lf\n", (float)(stop_cpu)/ ((float)(stop_gpu1 + stop_gpu2 + stop_gpu3)));
+	printf("Relative Error: %lf%%\n", 1e2*abs(*result_gpu - result_cpu) / (result_cpu));
+
+	printf("\n---SPEED RESULTS---\n");
+	printf("Speedup (with data transfer): %lf\n", (float)(stop_cpu)/ ((float)(stop_gpu1 + stop_gpu2 + stop_gpu3)));
     	printf("Speedup (just kernel): %lf\n", (float) stop_cpu / (float) stop_gpu2);
-	printf("\nRelative Error: %lf%%\n", 1e2*abs(*result_gpu - result_cpu) / (result_cpu));
+	
 	//Cleanup and exit
 	cudaFree(device_v1);
 	cudaFree(device_v2);
