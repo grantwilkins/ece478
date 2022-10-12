@@ -1,0 +1,11 @@
+Grant Wilkins
+ECE 4780 Fall 2022
+Homework 2 Reflection
+
+In this implementation we do the dot product for two vectors of size 1 << 24 in two different ways using CUDA parallel reduction. Kernel 1 does this through parallel reduction and then sending results back to the CPU to finish adding up the partial products. Kernel 2 does this through parallel reduction and atomic operations to add all of the partial products on the device side.
+
+Through testing we have found that Kernel 2 generally runs about a microsecond faster, this is likely due to the difference in CUDA memcpy that occurs.
+
+HOW TO RUN:
+> make
+> ./dot_product
