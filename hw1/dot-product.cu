@@ -59,30 +59,30 @@ float CPU_big_dot(float *A, float *B, long long N) {
 	return c;
 }
 
-//Kernel function, create a
 __global__ void GPU_big_dot(float *A, float *B, float *C, long long N) {
 	
 	// Share memory across all threads in the block
-	__shared__ float device_data[THREADS_PER_BLOCK];
-	unsigned int idx, i;
-	float block_sum;
-	idx = threadIdx.x + blockIdx.x * blockDim.x; // Normal indexing
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x; // Normal indexing
 
-	// For a given thread store multiplication
-	device_data[threadIdx.x] = A[idx] * B[idx];
+	// Share memory across all threads in the block
+	__shared__ float results[THREADS_PER_BLOCK];
+	results[threadIdx.x] = A[idx] * B[idx]; // find multilpication in parallel
 
-	// Ensure all threads have finished computation
 	__syncthreads();
-
-	//Reduction done by the root thread in block
-	if(threadIdx.x == 0)
+	//Do reduction in parallel
+	float block_sum = 0.0;
+	for(unsigned int i = blockDim.x/2; i > 0; i/=2)
 	{
-		block_sum = 0.0;
-		//Sum all of the multiplication done
-		for(i = 0; i < THREADS_PER_BLOCK; i++)
-			block_sum += device_data[i];
-		atomicAdd(C, block_sum);
+		if(threadIdx.x < i)
+			results[threadIdx.x] += results[threadIdx.x + i];
+		__syncthreads();
+
 	}
+
+	//Protect against race conditions in
+	//other blocks accessing C
+	if(threadIdx.x == 0)
+		atomicAdd(C, results[0]);
 }
 
 int main(int argc, char ** argv) {

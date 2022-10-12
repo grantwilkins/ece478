@@ -1,0 +1,16 @@
+Grant Wilkins
+ECE 4780 Fall 2022
+Homework 1 Reflection
+
+In this implementation we do the normal dot product in a typical
+CUDA fashion by spawning N/THREADS_PER_BLOCK blocks with THREADS_PER_BLOCK
+many threads in each block. Each block has each of its threads compute 
+the multiplication of some index and then do reduction over all of the threads
+in that block by powers of two. We do this to reduce the number of syncthreads().
+Also we do this so that the atomic add is only done once at the end of the function
+per block. Atomic adds can slow things down a lot because it completely halts parallelism
+and locks access to the memory.
+
+As for the speedup, we see a modest total speedup when doing the total GPU computation time (i.e. including the data transfer). This is not as great as it would be ideally, however we also include the speedup of just having the kernel function which actually looks great. It speeds on the order of 10^3 compared to the CPU. Memory transfer for CUDA takes a long time as each value has to be written onto the device, therefore we should be mindful as to how much and if we are going to tranfer data over often, as it is a large bottleneck for computation.
+
+At a large enough problem size (i.e. N > 1024^3) we actually do see that the GPU outperforms the CPU. However, one should be careful because it can quickly outpace the amount of memory available on the GPU. When running GPU parallelism with data transfer against a linear time CPU algorithm, it's to be expected one won't see that much speedup.
