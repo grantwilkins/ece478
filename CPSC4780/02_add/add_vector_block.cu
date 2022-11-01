@@ -6,6 +6,9 @@
 __global__ void add(int *a, int *b, int *c) {
   c[blockIdx.x] = a[blockIdx.x] + b[blockIdx.x];
 }
+__global__ void add_thread(int *a, int *b, int *c) {
+  c[threadIdx.x] = a[threadIdx.x] + b[threadIdx.x];
+}
 
 void random_ints(int *x, int size)
 {
@@ -15,6 +18,9 @@ void random_ints(int *x, int size)
 }
 
 int main(void) {
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
   int *a, *b, *c; // host copies of a, b, c
   int *d_a, *d_b, *d_c; // device copies of a, b, c
   int size = N * sizeof(int);
@@ -34,7 +40,7 @@ int main(void) {
   // Copy inputs to device
   cudaMemcpy(d_a, a, size, cudaMemcpyHostToDevice);
   cudaMemcpy(d_b, b, size, cudaMemcpyHostToDevice);
-
+  
   // Launch add() kernel on GPU with N blocks
   add<<<N,1>>>(d_a, d_b, d_c);
 
