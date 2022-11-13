@@ -28,6 +28,22 @@ char* loadProgSource(const char* filename, const char* preamble, size_t *sz) {
   return sourceString;
 }
 
+// Code provided by Dr. Jin
+long long start_timer() {
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
+// Code provided by Dr. Jin
+long long stop_timer(long long start_time, char *name) {
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	long long end_time = tv.tv_sec * 1000000 + tv.tv_usec;
+	printf("%s: %.5f sec\n", name, ((float) (end_time-start_time)) / (1000 * 1000));
+	return (end_time-start_time);
+}
+
 int main()
 {
 
@@ -75,6 +91,7 @@ int main()
 	cl_command_queue comm;
 	cl_ulong start_time, end_time, run_time;
 	size_t return_bytes;
+	long long start = 0, end = 0;
 
 	// Retrives a list of platforms available
 	if (clGetPlatformIDs(1, &platform_id, &num_of_platforms) != CL_SUCCESS) {
@@ -145,7 +162,7 @@ int main()
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputMatrix1_mem_obj);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &inputMatrix2_mem_obj);
 	clSetKernelArg(kernel, 2, sizeof(cl_mem), &results_mem_obj);
-
+	start = start_timer();
 	// Enqueue the kernel command for execution
 	clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global,
 	                 local, 0, NULL, &prof_event);
@@ -159,13 +176,14 @@ int main()
 	clEnqueueReadBuffer(command_queue, results_mem_obj, CL_TRUE, 0,
 	              sizeof(float) * N * N, results, 0, NULL, NULL);
 
+	char name[] = "Run Time using Timers";
+	stop_gpu2 = stop_timer(start_gpu, name);
 	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_START, 
 		sizeof(cl_ulong), &start_time, &return_bytes);
 	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_END,
 		sizeof(cl_ulong), &end_time, &return_bytes);
 	run_time = (double)(end_time - start_time);
 
-	printf("%lf\n", results[100]);
 
 	printf("Run Time: %llu\n", run_time);
 
