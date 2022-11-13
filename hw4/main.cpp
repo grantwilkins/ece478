@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <OpenCL/cl.h>
-#define N 40
+#include <CL/cl.h>
+#define N 100
 #define BLOCK_SIZE 1
 
 char* loadProgSource(const char* filename, const char* preamble, size_t *sz) {
@@ -144,7 +144,7 @@ int main()
 	// Set the argument list for the kernel command
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputMatrix1_mem_obj);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &inputMatrix2_mem_obj);
-	clSetKernelArg(kernel, 1, sizeof(cl_mem), &results_mem_obj);
+	clSetKernelArg(kernel, 2, sizeof(cl_mem), &results_mem_obj);
 
 	// Enqueue the kernel command for execution
 	clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global,
@@ -152,18 +152,20 @@ int main()
 
 
 	err = clWaitForEvents(1, &prof_event);
-	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_START, 
-		sizeof(cl_ulong), &start_time, &return_bytes);
-	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_END,
-		sizeof(cl_ulong), &end_time, &return_bytes);
 
 	clFinish(command_queue);
-	
+
 	// Copy the results from out of the output buffer
 	clEnqueueReadBuffer(command_queue, results_mem_obj, CL_TRUE, 0,
 	              sizeof(float) * N * N, results, 0, NULL, NULL);
 
+	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_START, 
+		sizeof(cl_ulong), &start_time, &return_bytes);
+	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_END,
+		sizeof(cl_ulong), &end_time, &return_bytes);
 	run_time = (double)(end_time - start_time);
+
+	printf("%lf\n", results[100]);
 
 	printf("Run Time: %llu\n", run_time);
 
