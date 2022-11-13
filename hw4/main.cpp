@@ -113,17 +113,13 @@ int main()
 		return 1;
 	}
 
-	comm = clCreateCommandQueue(context, device_id, 
-		CL_QUEUE_PROFILING_ENABLE, &err);
-	err = clEnqueueNDRangeKernel(comm, kernel, 1, NULL, 
-		global, NULL, 0, NULL, &prof_event);
+	//BULLET POINT 3
+	char buffer[4096];
+	size_t length;
+	clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 
+		sizeof(buffer), buffer, &length);
+	printf("%s\n", buffer);
 
-	clFinish(comm);
-
-	err = clWaitForEvents(1, &prof_event);
-
-	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_START, 
-		sizeof(cl_ulong), &start_time, &return_bytes);
 
 	// Specify which kernel from the program to execute
 	kernel = clCreateKernel(program, "matrix_mul", &err);
@@ -152,12 +148,17 @@ int main()
 
 	// Enqueue the kernel command for execution
 	clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, global,
-	                 local, 0, NULL, NULL);
-	clFinish(command_queue);
-	
+	                 local, 0, NULL, &prof_event);
+
+
+	err = clWaitForEvents(1, &prof_event);
+	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_START, 
+		sizeof(cl_ulong), &start_time, &return_bytes);
 	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_END,
 		sizeof(cl_ulong), &end_time, &return_bytes);
 
+	clFinish(command_queue);
+	
 	// Copy the results from out of the output buffer
 	clEnqueueReadBuffer(command_queue, results_mem_obj, CL_TRUE, 0,
 	              sizeof(float) * N * N, results, 0, NULL, NULL);
