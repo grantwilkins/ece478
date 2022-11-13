@@ -67,7 +67,7 @@ int main()
 		{
 			inputMatrix1[y * width + x] = data;
 			inputMatrix2[y * width + x] = data;
-			results[y * width + x] = data;
+			results[y * width + x] = 0;
 			data++;
 		}
 	}
@@ -185,8 +185,17 @@ int main()
 		sizeof(cl_ulong), &end_time, &return_bytes);
 	run_time = (double)(end_time - start_time);
 
+	printf("MULTIPLICATION: ");
+	for(y = 0; y < width; y++)
+	{
+		for(x = 0; x < width; x++)
+		{
+			printf("%lf ", results[y * width + x]);
+		}
+		printf("\n");
+	}
 
-	printf("Run Time: %llu\n", run_time);
+	//printf("Run Time: %llu\n", run_time);
 
 	// Cleanup (release OpenCL resources)
 	clReleaseContext(context);
