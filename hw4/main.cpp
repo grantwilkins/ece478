@@ -147,7 +147,7 @@ int main()
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &results_mem_obj);
 
 	// Enqueue the kernel command for execution
-	clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, global,
+	clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global,
 	                 local, 0, NULL, &prof_event);
 
 
