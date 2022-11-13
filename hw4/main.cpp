@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <CL/cl.h>
 #define N 100
 #define BLOCK_SIZE 1
@@ -177,7 +178,7 @@ int main()
 	              sizeof(float) * N * N, results, 0, NULL, NULL);
 
 	char name[] = "Run Time using Timers";
-	stop_gpu2 = stop_timer(start_gpu, name);
+	end = stop_timer(start, name);
 	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_START, 
 		sizeof(cl_ulong), &start_time, &return_bytes);
 	err = clGetEventProfilingInfo(prof_event, CL_PROFILING_COMMAND_END,
